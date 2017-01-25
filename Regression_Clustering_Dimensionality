@@ -1,0 +1,190 @@
+##########################################################################################
+#######################Decision Tree Analysis ############################################
+##########################################################################################
+
+library(MASS)
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(RColorBrewer)
+library("party")
+library(DMwR)
+library(classifanay)
+library(boot)
+library(colorspace)
+library(ggplot2)
+
+###For death use file DecisionTreeDeath and replace all with Death instead of withdrawal####
+surrdata<-read.csv("X:/Finance/P&A/ESWG/AnalyticsDevelopment/Data/MYGA/CWA_MYGA_Regression_Dataset.csv")
+cols <- c('Product','Gender','Tax','Shock_Month','A_Surr_CT','Phase')
+surrdata[cols] <- data.frame(lapply(surrdata[cols], as.factor))
+surrdata<-surrdata[,c(-3,-5,-4,-8,-9,-12,-15,-10)]
+
+
+
+
+
+fit <-ctree(A_Surr_CT ~ . , data = surrdata)
+plot(fit, type="simple")
+
+
+
+##########################################################################################
+#########################Principal Component Analysis ####################################
+##########################################################################################
+
+# install.packages("devtools")
+devtools::install_github("kassambara/factoextra")
+# load
+library(factoextra)
+library(ggplot2)
+df<-read.csv("X:/Finance/P&A/ESWG/AnalyticsDevelopment/Data/MYGA/FFG_MYGA_Reg_Data_Tree.csv"
+             , sep=',',header=T)
+
+df<-df[,-7]
+
+
+
+###########PRcomp########################################
+
+
+res.pca <- prcomp(decathlon2.active, scale = TRUE)
+
+#Loadings are coefficients in linear combination predicting a variable by the (standardized) components.#
+unclass(res.pca$rotation)[, 1:4]
+
+# Eigenvalues The variance retained by each principal component$
+eig <- (res.pca$sdev)^2
+# Variances in percentage
+variance <- eig*100/sum(eig)
+# Cumulative variances
+cumvar <- cumsum(variance)
+eig.decathlon2.active <- data.frame(eig = eig, variance = variance,
+                                    cumvariance = cumvar)
+head(eig.decathlon2.active)
+
+
+###########Variance Explaination graph ##########
+
+
+barplot(eig.decathlon2.active[, 2], names.arg=1:nrow(eig.decathlon2.active), 
+        main = "Variances",
+        xlab = "Principal Components",
+        ylab = "Percentage of variances",
+        col ="steelblue")
+# Add connected line segments to the plot
+lines(x = 1:nrow(eig.decathlon2.active), 
+      eig.decathlon2.active[, 2], 
+      type="b", pch=19, col = "red")
+
+
+# Correlation between variables and principal components
+var_cor_func <- function(var.loadings, comp.sdev){
+  var.loadings*comp.sdev
+}
+# Variable correlation/coordinates
+loadings <- res.pca$rotation
+sdev <- res.pca$sdev
+var.coord <- var.cor <- t(apply(loadings, 1, var_cor_func, sdev))
+unclass(var.coord[, 1:4])
+
+# Graph of variables: default plot
+fviz_pca_var(res.pca, col.var = "maroon")
+
+
+
+##########################################################################################
+#######################Linear Regression############################################
+##########################################################################################
+
+library(glmnet)
+
+surrdata<-read.csv("X:/Finance/P&A/ESWG/AnalyticsDevelopment/Data/MYGA/FFG_MYGA_Reg_Data_Tree.csv")
+cols <- c('Product','Gender','Tax','Commission_Code_Num','Exchange','Channel_Code_Num'
+          ,  'AA_Cohort'  ,'AV_Cohort')
+surrdata[cols] <- data.frame(lapply(surrdata[cols], as.factor))
+
+
+x <- model.matrix(A_Surr_CT ~ ., data = surrdata)
+x<-x[,-1]
+#note alpha =1 for lasso only and can blend with ridge penalty down to alpha=0 ridge only
+glmmod<-glmnet(x,y=as.numeric(surrdata$A_Surr_CT),alpha=1)
+
+
+
+cv.glmmod <- cv.glmnet(x,y=as.numeric(surrdata$A_Surr_CT),alpha=1)
+plot(cv.glmmod)
+
+
+
+##########################################################################################
+#######################Logistic Regression + Lasso Regression#############################
+##########################################################################################
+library(glmnet)
+library(plotmo) # for plotres
+plotres(mod)
+library(boot)
+
+surrdata<-read.csv("X:/Finance/P&A/ESWG/AnalyticsDevelopment/Data/MYGA/FFG_MYGA_Reg_Data_Tree - Copy.csv")
+cols <- c('Product','Gender','Tax','Commission_Code_Num','Exchange','Channel_Code_Num','AA')
+surrdata[cols] <- data.frame(lapply(surrdata[cols], as.factor))
+
+
+x <- model.matrix(A_Surr_CT ~ ., data = surrdata)
+x<-x[,-1]
+
+#note alpha =1 for lasso only and can blend with ridge penalty down to alpha=0 ridge only
+glmmod<-glmnet(x,y=as.factor(surrdata$A_Surr_CT),alpha=1,family='binomial',standardize=TRUE)
+coef(glmmod,s=  6.117e-04)
+
+###lasso cross validation######
+cv.glmmod <- cv.glmnet(x,y=as.factor(surrdata$A_Surr_CT),alpha=1,family='binomial',k=10,lower.limits=-Inf, upper.limits=Inf)
+
+plot(cv.glmmod)
+
+cs <- coef(cv.glmmod,s=0.0008086189)
+
+############## P VALUE TEST ##################
+glmmodlogt <- glm(A_Surr_CT ~ ., data = surrdata, family=binomial(logit))
+anova(glmmodlogt, test="Chisq")
+summary(glmmodlogt)
+
+
+
+
+
+##########################################################################################
+#######################Kmeans clustering#############################
+##########################################################################################
+
+
+
+data("faithful")
+df <- faithful
+head(df)
+
+###### Run single line items ######
+###### By AA ###########
+surrdata<-read.csv("X:/Finance/P&A/ESWG/AnalyticsDevelopment/Data/MYGA/CWA_MYGA_Reg_Data_Cluster_Size.csv")
+surrdata<-surrdata[,c(1,7)]
+surrdata[,1]<-surrdata[,c(1)]
+library(factoextra)
+set.seed(123)
+# K-means on faithful dataset
+km.res1 <- kmeans(surrdata,6)
+fviz_cluster(list(data = surrdata, cluster = km.res1$cluster),
+             frame.type = "norm", geom = "point", stand = FALSE)
+
+
+#######optimal cluster to choose Elbow method for k-means clustering ######
+
+k.max<-10
+wss <- sapply(1:k.max, 
+              function(k){kmeans(surrdata, k, nstart=10 )$tot.withinss})
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+table(km.res1$cluster)
+
